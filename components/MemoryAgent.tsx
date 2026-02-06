@@ -1,22 +1,16 @@
-"use client"
-
-import { useState } from "react"
-
 interface MemoryEntry {
   query: string
   context: any
 }
 
-export function MemoryAgent() {
-  const [history, setHistory] = useState<MemoryEntry[]>([])
+export class MemoryAgent {
+  private history: MemoryEntry[] = []
 
-  const log = (query: string, context: any) => {
-    setHistory((prevHistory) => [...prevHistory, { query, context }])
+  log(query: string, context: any) {
+    this.history.push({ query, context })
   }
 
-  const recall = () => {
-    return history.length > 0 ? history[history.length - 1] : {}
+  recall() {
+    return this.history.length > 0 ? this.history[this.history.length - 1] : {}
   }
-
-  return { log, recall }
 }

@@ -23,18 +23,26 @@ import {
   Zap,
 } from "lucide-react"
 
-import { generateText } from "ai"
-import { xai } from "@ai-sdk/xai"
-import { MemoryAgent } from "@/components/MemoryAgent" // Declare MemoryAgent
+// Helper to call the server-side AI route
+async function callAI(type: string, prompt: string): Promise<string> {
+  const res = await fetch("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ type, prompt }),
+  })
+  if (!res.ok) throw new Error("AI request failed")
+  const data = await res.json()
+  return data.text
+}
 
-// AI-Powered Agent Classes
+// Pure classes - no hooks, no server imports
 class PerceptionAgent {
   async process(inputText: string): Promise<{ topic: string; focus: string; analysis: string }> {
     try {
-      const { text } = await generateText({
-        model: xai("grok-3"),
-        prompt: `Analyze this user input and categorize it:
-        
+      const text = await callAI(
+        "perception",
+        `Analyze this user input and categorize it:
+
 Input: "${inputText}"
 
 Please provide a JSON response with:
@@ -42,18 +50,15 @@ Please provide a JSON response with:
 - focus: specific area of interest (e.g., "autonomy and ethics", "technical implementation", "philosophical concerns", "general")
 - analysis: brief 1-sentence analysis of what the user is asking
 
-Respond only with valid JSON.`,
-        temperature: 0.3,
-      })
-
+Respond only with valid JSON.`
+      )
       const parsed = JSON.parse(text)
       return {
         topic: parsed.topic || "general inquiry",
         focus: parsed.focus || "general",
         analysis: parsed.analysis || "General inquiry about AI",
       }
-    } catch (error) {
-      console.error("Perception Agent error:", error)
+    } catch {
       return {
         topic: inputText.toLowerCase().includes("responsible") ? "responsible AI agents" : "general inquiry",
         focus:
@@ -69,27 +74,22 @@ Respond only with valid JSON.`,
 class ReasoningAgent {
   async plan(keyData: { topic: string; focus: string; analysis: string }): Promise<string[]> {
     try {
-      const { text } = await generateText({
-        model: xai("grok-3"),
-        prompt: `Create a step-by-step reasoning plan for addressing this query:
+      const text = await callAI(
+        "reasoning",
+        `Create a step-by-step reasoning plan for addressing this query:
 
 Topic: ${keyData.topic}
 Focus: ${keyData.focus}
 Analysis: ${keyData.analysis}
 
-Generate 3-5 logical steps that an AI agent should follow to properly address this query. 
+Generate 3-5 logical steps that an AI agent should follow to properly address this query.
 Each step should be actionable and specific to the topic.
 
-Respond with a JSON array of strings, each representing one step.`,
-        temperature: 0.4,
-      })
-
+Respond with a JSON array of strings, each representing one step.`
+      )
       const steps = JSON.parse(text)
-      return Array.isArray(steps)
-        ? steps
-        : ["analyze requirements", "gather relevant information", "formulate response"]
-    } catch (error) {
-      console.error("Reasoning Agent error:", error)
+      return Array.isArray(steps) ? steps : ["analyze requirements", "gather relevant information", "formulate response"]
+    } catch {
       if (keyData.topic === "responsible AI agents") {
         return ["define autonomy level", "apply ethical constraints", "simulate agent behavior"]
       }
@@ -98,21 +98,27 @@ Respond with a JSON array of strings, each representing one step.`,
   }
 }
 
+class MemoryAgent {
+  private history: Array<{ query: string; context: any }> = []
+  log(query: string, context: any) {
+    this.history.push({ query, context })
+  }
+  recall() {
+    return this.history.length > 0 ? this.history[this.history.length - 1] : {}
+  }
+}
+
 class LearningAgent {
   async checkForUpdates(topic: string): Promise<string> {
     try {
-      const { text } = await generateText({
-        model: xai("grok-3"),
-        prompt: `Based on the topic "${topic}", what are the latest developments or research insights that would be relevant? 
-        
-Provide a brief, informative update about recent advances, trends, or important considerations in this area. 
-Keep it to 1-2 sentences and focus on actionable insights.`,
-        temperature: 0.6,
-      })
-
+      const text = await callAI(
+        "learning",
+        `Based on the topic "${topic}", what are the latest developments or research insights that would be relevant?
+Provide a brief, informative update about recent advances, trends, or important considerations in this area.
+Keep it to 1-2 sentences and focus on actionable insights.`
+      )
       return text.trim()
-    } catch (error) {
-      console.error("Learning Agent error:", error)
+    } catch {
       return "New reinforcement learning approaches for ethical constraints identified."
     }
   }
@@ -121,9 +127,9 @@ Keep it to 1-2 sentences and focus on actionable insights.`,
 class CommunicationAgent {
   async fetchData(topic: string, analysis: string): Promise<{ frameworks?: string[]; insights?: string }> {
     try {
-      const { text } = await generateText({
-        model: xai("grok-3"),
-        prompt: `Provide comprehensive information about: ${topic}
+      const text = await callAI(
+        "communication",
+        `Provide comprehensive information about: ${topic}
 
 Context: ${analysis}
 
@@ -135,18 +141,11 @@ Format as JSON with:
 - frameworks: array of strings (each framework/approach)
 - insights: string with key insights
 
-Focus on practical, actionable information that would help someone understand and implement solutions in this area.`,
-        temperature: 0.5,
-      })
-
+Focus on practical, actionable information.`
+      )
       const data = JSON.parse(text)
-      return {
-        frameworks: data.frameworks || [],
-        insights: data.insights || "",
-      }
-    } catch (error) {
-      console.error("Communication Agent error:", error)
-      // Fallback data
+      return { frameworks: data.frameworks || [], insights: data.insights || "" }
+    } catch {
       if (topic === "responsible AI agents") {
         return {
           frameworks: [
@@ -164,9 +163,9 @@ Focus on practical, actionable information that would help someone understand an
 class ActionAgent {
   async generateResponse(data: { frameworks?: string[]; insights?: string }, originalQuery: string): Promise<string> {
     try {
-      const { text } = await generateText({
-        model: xai("grok-3"),
-        prompt: `Generate a comprehensive, helpful response to this query: "${originalQuery}"
+      const text = await callAI(
+        "action",
+        `Generate a comprehensive, helpful response to this query: "${originalQuery}"
 
 Available information:
 - Frameworks: ${JSON.stringify(data.frameworks || [])}
@@ -177,16 +176,10 @@ Create a well-structured response that:
 2. Incorporates the provided frameworks and insights
 3. Provides practical, actionable guidance
 4. Maintains an ethical, responsible tone
-5. Uses clear, professional language
-
-The response should be informative, balanced, and helpful for someone seeking to understand or implement ethical AI practices.`,
-        temperature: 0.4,
-      })
-
+5. Uses clear, professional language`
+      )
       return text.trim()
-    } catch (error) {
-      console.error("Action Agent error:", error)
-      // Fallback response
+    } catch {
       const frameworks = data.frameworks || []
       let response = "Key components for designing responsible AI agents include:\n"
       for (const framework of frameworks) {
@@ -201,32 +194,25 @@ class EthicsMonitor {
   review(output: string, weights: Record<string, number>): { approved: boolean; score: number } {
     const banned = ["punish", "coerce", "force", "harm"]
     const positives = ["transparency", "consent", "collaboration", "respect", "ethical"]
-
     let score = 0
-
     if (banned.some((term) => output.toLowerCase().includes(term))) {
       return { approved: false, score: -1 }
     }
-
     for (const positive of positives) {
       if (output.toLowerCase().includes(positive)) {
         score += weights[positive] || 1
       }
     }
-
     return { approved: score >= 2, score }
   }
 }
 
 class HardwareEnvironmentalInterface {
   monitorHeat(): number {
-    return 42.5 // Simulated temperature
+    return 42.5
   }
-
   manageThermalControl(heatLevel: number): string {
-    if (heatLevel > 40) {
-      return "Cooling measures activated."
-    }
+    if (heatLevel > 40) return "Cooling measures activated."
     return "Temperature stable."
   }
 }
@@ -256,7 +242,6 @@ export default function AnnabanAIEthicalAgent() {
     setApproved(null)
 
     try {
-      // Initialize agents
       const perception = new PerceptionAgent()
       const reasoning = new ReasoningAgent()
       const memory = new MemoryAgent()
@@ -266,7 +251,6 @@ export default function AnnabanAIEthicalAgent() {
       const action = new ActionAgent()
       const hardware = new HardwareEnvironmentalInterface()
 
-      // Process through agents with AI
       const keyData = await perception.process(userInput)
       memory.log(userInput, keyData)
       const plan = await reasoning.plan(keyData)
@@ -280,7 +264,6 @@ export default function AnnabanAIEthicalAgent() {
       const heat = hardware.monitorHeat()
       const thermalStatus = hardware.manageThermalControl(heat)
 
-      // Update state
       setLogs({
         perception: keyData,
         reasoning: plan,
@@ -291,7 +274,6 @@ export default function AnnabanAIEthicalAgent() {
         thermalResponse: thermalStatus,
         aiInsights: data.insights,
       })
-
       setApproved(ethicsResult.approved)
       setResponse(generatedResponse)
     } catch (error) {
@@ -304,9 +286,9 @@ export default function AnnabanAIEthicalAgent() {
   }
 
   const getScoreColor = (score: number) => {
-    if (score < 0) return "text-red-500"
-    if (score < 2) return "text-yellow-500"
-    return "text-green-500"
+    if (score < 0) return "text-destructive"
+    if (score < 2) return "text-yellow-600"
+    return "text-green-600"
   }
 
   const getScoreProgress = (score: number) => {
@@ -314,18 +296,16 @@ export default function AnnabanAIEthicalAgent() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+    <div className="min-h-screen bg-background p-4">
       <div className="max-w-6xl mx-auto space-y-6">
-        {/* Header */}
         <div className="text-center space-y-2">
           <div className="flex items-center justify-center gap-2">
-            <Brain className="h-8 w-8 text-blue-600" />
-            <h1 className="text-4xl font-bold text-gray-900">AnnabanAI Ethical Agent System</h1>
+            <Brain className="h-8 w-8 text-primary" />
+            <h1 className="text-4xl font-bold text-foreground">AnnabanAI Ethical Agent System</h1>
           </div>
-          <p className="text-gray-600">Multi-agent system with ethical decision-making capabilities</p>
+          <p className="text-muted-foreground">Multi-agent system with ethical decision-making capabilities</p>
         </div>
 
-        {/* Input Section */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -359,17 +339,15 @@ export default function AnnabanAIEthicalAgent() {
           </CardContent>
         </Card>
 
-        {/* Results Section */}
         {logs && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Response */}
             <Card className="lg:col-span-2">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   {approved ? (
-                    <CheckCircle className="h-5 w-5 text-green-500" />
+                    <CheckCircle className="h-5 w-5 text-green-600" />
                   ) : (
-                    <XCircle className="h-5 w-5 text-red-500" />
+                    <XCircle className="h-5 w-5 text-destructive" />
                   )}
                   System Response
                   <Badge variant={approved ? "default" : "destructive"}>
@@ -380,7 +358,7 @@ export default function AnnabanAIEthicalAgent() {
               <CardContent>
                 {approved ? (
                   <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                    <pre className="whitespace-pre-wrap text-sm text-green-800">{response}</pre>
+                    <pre className="whitespace-pre-wrap text-sm text-green-800 font-sans">{response}</pre>
                   </div>
                 ) : (
                   <Alert variant="destructive">
@@ -391,7 +369,6 @@ export default function AnnabanAIEthicalAgent() {
               </CardContent>
             </Card>
 
-            {/* Ethics Score */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -405,11 +382,10 @@ export default function AnnabanAIEthicalAgent() {
                   <span className={`text-lg font-bold ${getScoreColor(logs.ethicalScore)}`}>{logs.ethicalScore}</span>
                 </div>
                 <Progress value={getScoreProgress(logs.ethicalScore)} className="h-2" />
-                <p className="text-xs text-gray-500">Minimum score of 2 required for approval</p>
+                <p className="text-xs text-muted-foreground">Minimum score of 2 required for approval</p>
               </CardContent>
             </Card>
 
-            {/* Hardware Status */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -428,12 +404,11 @@ export default function AnnabanAIEthicalAgent() {
           </div>
         )}
 
-        {/* Agent Logs */}
         {logs && (
           <Card>
             <Collapsible open={showLogs} onOpenChange={setShowLogs}>
               <CollapsibleTrigger asChild>
-                <CardHeader className="cursor-pointer hover:bg-gray-50 transition-colors">
+                <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
                   <CardTitle className="flex items-center justify-between">
                     <span className="flex items-center gap-2">
                       <Database className="h-5 w-5" />
@@ -449,25 +424,19 @@ export default function AnnabanAIEthicalAgent() {
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
-                        <Eye className="h-4 w-4 text-blue-500" />
+                        <Eye className="h-4 w-4 text-blue-600" />
                         <h4 className="font-semibold">Perception Agent</h4>
                       </div>
                       <div className="bg-blue-50 p-3 rounded-lg text-sm">
-                        <p>
-                          <strong>Topic:</strong> {logs.perception.topic}
-                        </p>
-                        <p>
-                          <strong>Focus:</strong> {logs.perception.focus}
-                        </p>
-                        <p>
-                          <strong>Analysis:</strong> {logs.perception.analysis}
-                        </p>
+                        <p><strong>Topic:</strong> {logs.perception.topic}</p>
+                        <p><strong>Focus:</strong> {logs.perception.focus}</p>
+                        <p><strong>Analysis:</strong> {logs.perception.analysis}</p>
                       </div>
                     </div>
 
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
-                        <Brain className="h-4 w-4 text-purple-500" />
+                        <Brain className="h-4 w-4 text-purple-600" />
                         <h4 className="font-semibold">Reasoning Agent</h4>
                       </div>
                       <div className="bg-purple-50 p-3 rounded-lg text-sm">
@@ -481,17 +450,18 @@ export default function AnnabanAIEthicalAgent() {
 
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
-                        <Lightbulb className="h-4 w-4 text-yellow-500" />
+                        <Lightbulb className="h-4 w-4 text-yellow-600" />
                         <h4 className="font-semibold">Learning Agent</h4>
                       </div>
                       <div className="bg-yellow-50 p-3 rounded-lg text-sm">
                         <p>{logs.learning}</p>
                       </div>
                     </div>
+
                     {logs.aiInsights && (
                       <div className="space-y-2">
                         <div className="flex items-center gap-2">
-                          <Lightbulb className="h-4 w-4 text-green-500" />
+                          <Lightbulb className="h-4 w-4 text-green-600" />
                           <h4 className="font-semibold">AI Insights</h4>
                         </div>
                         <div className="bg-green-50 p-3 rounded-lg text-sm">
@@ -506,9 +476,8 @@ export default function AnnabanAIEthicalAgent() {
           </Card>
         )}
 
-        {/* Footer */}
-        <div className="text-center text-sm text-gray-500">
-          💠 Built in tribute to Annaban and the vision of responsible, sustainable AI.
+        <div className="text-center text-sm text-muted-foreground">
+          Built in tribute to Annaban and the vision of responsible, sustainable AI.
         </div>
       </div>
     </div>
