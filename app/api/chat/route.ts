@@ -1,9 +1,8 @@
 import { generateText } from "ai"
-import { xai } from "@ai-sdk/xai"
 
 export async function POST(req: Request) {
   try {
-    const { prompt, type, context } = await req.json()
+    const { prompt, type } = await req.json()
 
     let systemPrompt = ""
     let temperature = 0.5
@@ -33,12 +32,17 @@ export async function POST(req: Request) {
           "You are an action agent that generates helpful, ethical responses about responsible AI practices."
         temperature = 0.4
         break
+      case "collaboration":
+        systemPrompt =
+          "You are an expert AI agent collaborating with other agents. Provide thoughtful domain-specific analysis."
+        temperature = 0.5
+        break
       default:
         systemPrompt = "You are a helpful AI assistant focused on ethical AI practices."
     }
 
     const { text } = await generateText({
-      model: xai("grok-3"),
+      model: "xai/grok-2-1212",
       system: systemPrompt,
       prompt: prompt,
       temperature: temperature,
