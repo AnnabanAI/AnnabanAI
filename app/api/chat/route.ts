@@ -1,4 +1,5 @@
 import { generateText } from "ai"
+import { xai } from "@ai-sdk/xai"
 
 export async function POST(req: Request) {
   try {
@@ -42,7 +43,7 @@ export async function POST(req: Request) {
     }
 
     const { text } = await generateText({
-      model: "xai/grok-2-1212",
+      model: xai("grok-2-1212"),
       system: systemPrompt,
       prompt: prompt,
       temperature: temperature,
