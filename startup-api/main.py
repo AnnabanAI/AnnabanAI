@@ -9,6 +9,7 @@ not a persistent or independently verified audit ledger.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import os
 import time
@@ -16,7 +17,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
@@ -200,6 +201,7 @@ def health() -> dict[str, Any]:
         "version": APP_VERSION,
         "model": MODEL,
         "openai_api_key_configured": bool(os.getenv("OPENAI_API_KEY")),
+        "annaban_api_key_configured": bool(os.getenv("ANNABAN_API_KEY")),
         "note": "Readiness is not proof that a live OpenAI request has succeeded.",
     }
 
@@ -218,7 +220,19 @@ def defaults() -> dict[str, Any]:
 
 
 @app.post("/startup/build")
-def build_startup(request: StartupBuildRequest) -> dict[str, Any]:
+def build_startup(
+    request: StartupBuildRequest,
+    x_annaban_api_key: str | None = Header(default=None),
+) -> dict[str, Any]:
+    expected_key = os.getenv("ANNABAN_API_KEY")
+    if not expected_key:
+        raise HTTPException(
+            status_code=503,
+            detail="ANNABAN_API_KEY is not configured; generation endpoint is disabled.",
+        )
+    if not hmac.compare_digest(x_annaban_api_key or "", expected_key):
+        raise HTTPException(status_code=401, detail="Missing or invalid X-Annaban-API-Key.")
+
     if not os.getenv("OPENAI_API_KEY"):
         raise HTTPException(
             status_code=503,
