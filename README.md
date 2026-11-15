@@ -121,3 +121,27 @@ pip install -r requirements.txt
 export XAI_API_KEY="your_key_here"
 
 python main.py
+
+
+---
+
+## AnnabanOS API and Python SDK
+
+The repository now includes a read-only FastAPI service and synchronous Python client.
+
+- API: [`annaban_startup_api.py`](annaban_startup_api.py)
+- SDK: [`sdk/python/annabanos_client.py`](sdk/python/annabanos_client.py)
+- Setup and endpoint reference: [`ANNABANOS_API_SDK.md`](ANNABANOS_API_SDK.md)
+- SDK usage: [`sdk/README.md`](sdk/README.md)
+- API contract tests: [`tests/test_annaban_startup_api.py`](tests/test_annaban_startup_api.py)
+
+Local run:
+
+```bash
+python -m pip install -r requirements.txt
+export ANNABAN_API_KEY="replace-with-a-long-random-secret"
+export OPENAI_API_KEY="configure-your-provider-key"
+uvicorn annaban_startup_api:app --host 127.0.0.1 --port 8000
+```
+
+The Space Devs integration is read-only and cached. The Fox Sports/NFL overlay is simulation-only; no live Fox endpoint is queried. No spacecraft or broadcast control is implemented. Project initiation is attributed to Jacob Wayne Kinnaird; the code is ChatGPT-generated. This attribution does not determine legal ownership.
