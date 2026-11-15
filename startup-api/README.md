@@ -29,12 +29,13 @@ Omit the brief to use the built-in startup prompt:
 ```bash
 curl -X POST http://127.0.0.1:8000/startup/build \
   -H "Content-Type: application/json" \
+  -H 'X-Annaban-API-Key: your-annaban-api-key' \\
   -d '{"monthly_requests":100000,"baseline_cost_per_1000_usd":0.50,"governance_cost_per_1000_usd":0.65,"estimated_monthly_savings_usd":250}'
 ```
 
 ## Deployment configuration
 
-Set `OPENAI_API_KEY` as a secret in the hosting provider's environment settings. Do not commit a real key.
+Set `OPENAI_API_KEY` and `ANNABAN_API_KEY` as secrets in the hosting provider's environment settings. Do not commit real keys. The POST endpoint requires the `X-Annaban-API-Key` header and returns 401 for a missing or invalid key; it returns 503 until both required keys are configured.
 Set `OPENAI_MODEL` to a model enabled for the account. Set token price variables from the current official model pricing to enable the per-response estimate.
 
 ## Important limitations
