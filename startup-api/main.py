@@ -73,7 +73,6 @@ app = FastAPI(
 class StartupBuildRequest(BaseModel):
     brief: str = Field(
         default=DEFAULT_STARTUP_BRIEF,
-        min_length=1,
         max_length=20000,
         description="Optional startup brief. Omit it to use the built-in default.",
     )
@@ -107,6 +106,9 @@ def calculate_economics(
     rates_configured = input_rate > 0 or output_rate > 0
 
     estimated_api_cost = None
+    estimated_monthly_api_cost = None
+    forecast_input_tokens = request.input_tokens_per_request
+    forecast_output_tokens = request.output_tokens_per_request
     if rates_configured:
         estimated_api_cost = round(
             (
@@ -115,6 +117,13 @@ def calculate_economics(
             )
             / 1_000_000,
             8,
+        )
+        forecast_per_request = (
+            forecast_input_tokens * input_rate
+            + forecast_output_tokens * output_rate
+        ) / 1_000_000
+        estimated_monthly_api_cost = round(
+            forecast_per_request * request.monthly_requests, 4
         )
 
     baseline_monthly = (
@@ -137,6 +146,9 @@ def calculate_economics(
             "input_usd_per_million_tokens": input_rate if rates_configured else None,
             "output_usd_per_million_tokens": output_rate if rates_configured else None,
             "estimated_generation_cost_usd": estimated_api_cost,
+            "forecast_input_tokens_per_request": forecast_input_tokens,
+            "forecast_output_tokens_per_request": forecast_output_tokens,
+            "estimated_monthly_api_cost_usd": estimated_monthly_api_cost,
             "rates_configured": rates_configured,
             "note": (
                 "Estimate based on configured token rates."
